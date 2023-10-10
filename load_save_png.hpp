@@ -4,17 +4,18 @@
 
 #include <string>
 #include <vector>
-#include <stdint.h>
+#include <cstdint>
 
 /*
  * Load and save PNG files.
  */
 
 enum OriginLocation {
-	LowerLeftOrigin,
-	UpperLeftOrigin,
+    LowerLeftOrigin,
+    UpperLeftOrigin,
 };
 
 //NOTE: load_png will throw on error
-void load_png(std::string filename, glm::uvec2 *size, std::vector< glm::u8vec4 > *data, OriginLocation origin);
-void save_png(std::string filename, glm::uvec2 size, glm::u8vec4 const *data, OriginLocation origin);
+void load_png(const std::string &filename, glm::uvec2 *size, std::vector<glm::u8vec4> *data, OriginLocation origin);
+
+void save_png(const std::string &filename, glm::uvec2 size, glm::u8vec4 const *data, OriginLocation origin);
