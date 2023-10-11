@@ -2,6 +2,9 @@
 
 #include "Connection.hpp"
 #include "Game.hpp"
+#include "Mesh.hpp"
+#include "WalkMesh.hpp"
+#include "Scene.hpp"
 
 #include <glm/glm.hpp>
 
@@ -34,4 +37,14 @@ struct PlayMode : Mode {
     //connection to server:
     Client &client;
     
+    // player info (for just the client's player, to be updated according to server data)
+    struct Player {
+        WalkPoint at;
+        //transform is at player's feet and will be yawed by mouse left/right motion:
+        Scene::Transform *transform = nullptr;
+        //camera is at player's head and will be pitched by mouse up/down motion:
+        Scene::Camera *camera = nullptr;
+    } player;
+    
+    Scene scene;
 };

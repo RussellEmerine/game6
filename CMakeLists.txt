@@ -75,4 +75,6 @@ add_executable(game6
         ShowSceneProgram.cpp
         ShowSceneProgram.hpp
         Sound.cpp
-        Sound.hpp)
+        Sound.hpp
+        WalkMesh.hpp
+        WalkMesh.cpp)

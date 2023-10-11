@@ -9,6 +9,7 @@ else ifeq ($(UNAME_S),Linux)
 else
 	BLENDER = blender
 endif
+BLENDER = Blender
 
 EXPORT_MESHES=export-meshes.py
 EXPORT_WALKMESHES=export-walkmeshes.py
@@ -17,15 +18,15 @@ EXPORT_SCENE=export-scene.py
 DIST=../dist
 
 all : \
-	$(DIST)/phone-bank.pnct \
-	$(DIST)/phone-bank.w \
-	$(DIST)/phone-bank.scene \
+	$(DIST)/world.pnct \
+	$(DIST)/world.w \
+	$(DIST)/world.scene \
 
-$(DIST)/phone-bank.pnct : phone-bank.blend $(EXPORT_MESHES)
+$(DIST)/world.pnct : world.blend $(EXPORT_MESHES)
 	$(BLENDER) --background --python $(EXPORT_MESHES) -- '$<':Platforms '$@'
 
-$(DIST)/phone-bank.scene : phone-bank.blend $(EXPORT_SCENE)
+$(DIST)/world.scene : world.blend $(EXPORT_SCENE)
 	$(BLENDER) --background --python $(EXPORT_SCENE) -- '$<':Platforms '$@'
 
-$(DIST)/phone-bank.w : phone-bank.blend $(EXPORT_WALKMESHES)
+$(DIST)/world.w : world.blend $(EXPORT_WALKMESHES)
 	$(BLENDER) --background --python $(EXPORT_WALKMESHES) -- '$<':WalkMeshes '$@'

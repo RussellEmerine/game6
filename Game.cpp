@@ -1,6 +1,11 @@
 #include "Game.hpp"
 
 #include "Connection.hpp"
+#include "data_path.hpp"
+#include "Mesh.hpp"
+#include "Load.hpp"
+#include "WalkMesh.hpp"
+#include "LitColorTextureProgram.hpp"
 
 #include <stdexcept>
 #include <iostream>
