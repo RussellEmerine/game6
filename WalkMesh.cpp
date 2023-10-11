@@ -153,7 +153,7 @@ void WalkMesh::walk_in_triangle(WalkPoint const &start, glm::vec3 const &step, W
     end = WalkPoint(start.indices, start.weights + time * bary_step);
     
     // Remember: our convention is that when a WalkPoint is on an edge,
-    // then wp.weights.z == 0.0f (so will likely need to re-order the indices)
+    // then at.weights.z == 0.0f (so will likely need to re-order the indices)
     switch (crossed_edge) {
         case 0:
             end = WalkPoint(

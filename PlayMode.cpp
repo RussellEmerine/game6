@@ -25,6 +25,7 @@ Load<MeshBuffer> world_meshes(LoadTagDefault, []() -> MeshBuffer const * {
     return ret;
 });
 
+// TODO: merge this with the world_scene in Game.hpp
 Load<Scene> world_scene(LoadTagDefault, []() -> Scene const * {
     return new Scene(
             data_path("world.scene"),
@@ -42,13 +43,6 @@ Load<Scene> world_scene(LoadTagDefault, []() -> Scene const * {
                 drawable.pipeline.count = mesh.count;
                 
             });
-});
-
-WalkMesh const *walkmesh = nullptr;
-Load<WalkMeshes> world_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
-    auto *ret = new WalkMeshes(data_path("world.w"));
-    walkmesh = &ret->lookup("WalkMesh");
-    return ret;
 });
 
 PlayMode::PlayMode(Client &client_) : client(client_), scene(*world_scene) {
@@ -72,7 +66,7 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*world_scene) {
     player.camera->transform->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
     
     // start player walking at nearest walk point:
-    player.at = walkmesh->nearest_walk_point(player.transform->position);
+    player.at = game.walkmesh->nearest_walk_point(player.transform->position);
 }
 
 PlayMode::~PlayMode() = default;
@@ -160,6 +154,11 @@ void PlayMode::update(float elapsed) {
             }
         }
     }, 0.0);
+    
+    // TODO: loop through game players and filter on name
+    player.at = game.players.back().at;
+    player.transform->position = game.walkmesh->to_world_point(player.at);
+    player.transform->rotation = game.players.back().rotation;
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {

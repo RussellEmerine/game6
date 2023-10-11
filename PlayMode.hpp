@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Mode.hpp"
 
 #include "Connection.hpp"
@@ -38,7 +40,7 @@ struct PlayMode : Mode {
     Client &client;
     
     // player info (for just the client's player, to be updated according to server data)
-    struct Player {
+    struct ClientPlayer {
         WalkPoint at;
         //transform is at player's feet and will be yawed by mouse left/right motion:
         Scene::Transform *transform = nullptr;

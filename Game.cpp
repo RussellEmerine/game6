@@ -2,10 +2,8 @@
 
 #include "Connection.hpp"
 #include "data_path.hpp"
-#include "Mesh.hpp"
 #include "Load.hpp"
 #include "WalkMesh.hpp"
-#include "LitColorTextureProgram.hpp"
 
 #include <stdexcept>
 #include <iostream>
@@ -79,27 +77,38 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 
 //-----------------------------------------
 
+// moved this out of a load that would have to be in a header to avoid linker errors
+WalkMeshes const *world_walkmeshes = nullptr;
+
 Game::Game() : mt(0x15466666) {
+    if (world_walkmeshes == nullptr) {
+        world_walkmeshes = new WalkMeshes(data_path("world.w"));
+    }
+    
+    walkmesh = &world_walkmeshes->lookup("WalkMesh");
+    assert(walkmesh && "walkmesh not initialized");
 }
 
 Player *Game::spawn_player() {
     players.emplace_back();
     Player &player = players.back();
     
-    //random point in the middle area of the arena:
-    player.position.x = glm::mix(ArenaMin.x + 2.0f * PlayerRadius, ArenaMax.x - 2.0f * PlayerRadius,
-                                 0.4f + 0.2f * mt() / float(mt.max()));
-    player.position.y = glm::mix(ArenaMin.y + 2.0f * PlayerRadius, ArenaMax.y - 2.0f * PlayerRadius,
-                                 0.4f + 0.2f * mt() / float(mt.max()));
+    // TODO: make this randomized
+    player.at = walkmesh->nearest_walk_point(glm::vec3(0, 0, 0));
+    // TODO: randomize the angle
+    player.rotation = glm::rotation(
+            glm::vec3(0.0f, 0.0f, 1.0f),
+            walkmesh->to_world_smooth_normal(player.at)
+    );
     
     do {
-        player.color.r = mt() / float(mt.max());
-        player.color.g = mt() / float(mt.max());
-        player.color.b = mt() / float(mt.max());
+        player.color.r = float(mt()) / float(std::mt19937::max());
+        player.color.g = float(mt()) / float(std::mt19937::max());
+        player.color.b = float(mt()) / float(std::mt19937::max());
     } while (player.color == glm::vec3(0.0f));
     player.color = glm::normalize(player.color);
     
-    player.name = "Player " + std::to_string(next_player_number++);
+    player.name = "ClientPlayer " + std::to_string(next_player_number++);
     
     return &player;
 }
@@ -118,80 +127,82 @@ void Game::remove_player(Player *player) {
 
 void Game::update(float elapsed) {
     //position/velocity update:
-    for (auto &p: players) {
-        glm::vec2 dir = glm::vec2(0.0f, 0.0f);
-        if (p.controls.left.pressed) dir.x -= 1.0f;
-        if (p.controls.right.pressed) dir.x += 1.0f;
-        if (p.controls.down.pressed) dir.y -= 1.0f;
-        if (p.controls.up.pressed) dir.y += 1.0f;
+    for (auto &player: players) {
+        // part paraphrased, part copied, from game5 base code:
+        glm::vec3 move = glm::vec3(0.0f, 0.0f, 0.0f);
+        if (player.controls.left.pressed) move.x -= 1.0f;
+        if (player.controls.right.pressed) move.x += 1.0f;
+        if (player.controls.down.pressed) move.y -= 1.0f;
+        if (player.controls.up.pressed) move.y += 1.0f;
         
-        if (dir == glm::vec2(0.0f)) {
-            //no inputs: just drift to a stop
-            float amt = 1.0f - std::pow(0.5f, elapsed / (PlayerAccelHalflife * 2.0f));
-            p.velocity = glm::mix(p.velocity, glm::vec2(0.0f, 0.0f), amt);
-        } else {
-            //inputs: tween velocity to target direction
-            dir = glm::normalize(dir);
-            
-            float amt = 1.0f - std::pow(0.5f, elapsed / PlayerAccelHalflife);
-            
-            //accelerate along velocity (if not fast enough):
-            float along = glm::dot(p.velocity, dir);
-            if (along < PlayerSpeed) {
-                along = glm::mix(along, PlayerSpeed, amt);
-            }
-            
-            //damp perpendicular velocity:
-            float perp = glm::dot(p.velocity, glm::vec2(-dir.y, dir.x));
-            perp = glm::mix(perp, 0.0f, amt);
-            
-            p.velocity = dir * along + glm::vec2(-dir.y, dir.x) * perp;
+        if (glm::length(move) > 0) {
+            // TODO: make player speed a constant
+            move = glm::normalize(move) * 2.0f * elapsed;
         }
-        p.position += p.velocity * elapsed;
+        
+        glm::vec3 remain = player.rotation * move;
+        
+        for (size_t i = 0; i < 10; i++) {
+            if (remain == glm::vec3(0.0f, 0.0f, 0.0f)) {
+                break;
+            }
+            WalkPoint end;
+            float time;
+            
+            walkmesh->walk_in_triangle(player.at, remain, &end, &time);
+            player.at = end;
+            if (time == 1.0f) {
+                remain = glm::vec3(0.0f, 0.0f, 0.0f);
+                break;
+            }
+            remain *= (1.0f - time);
+            glm::quat rotation;
+            if (walkmesh->cross_edge(player.at, &end, &rotation)) {
+                player.at = end;
+                remain = rotation * remain;
+            } else {
+                glm::vec3 const &a = walkmesh->vertices[player.at.indices.x];
+                glm::vec3 const &b = walkmesh->vertices[player.at.indices.y];
+                glm::vec3 const &c = walkmesh->vertices[player.at.indices.z];
+                glm::vec3 along = glm::normalize(b - a);
+                glm::vec3 normal = glm::normalize(glm::cross(b - a, c - a));
+                glm::vec3 in = glm::cross(normal, along);
+                
+                // check how much 'remain' is pointing out of the triangle:
+                float d = glm::dot(remain, in);
+                if (d < 0.0f) {
+                    // bounce off of the wall:
+                    remain += (-1.25f * d) * in;
+                } else {
+                    // if it's just pointing along the edge, bend slightly away from wall:
+                    remain += 0.01f * d * in;
+                }
+            }
+        }
+        
+        if (remain != glm::vec3(0.0f)) {
+            std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
+        }
+        
+        // game5 code updates transform position here, we don't to that
+        // since the client will update position based on sent walkpoints
+        
+        // update the rotation, this has to sent
+        {
+            glm::quat adjust = glm::rotation(
+                    player.rotation * glm::vec3(0.0f, 0.0f, 1.0f), //current up vector
+                    walkmesh->to_world_smooth_normal(player.at) //smoothed up vector at walk location
+            );
+            player.rotation = glm::normalize(adjust * player.rotation);
+        }
         
         //reset 'downs' since controls have been handled:
-        p.controls.left.downs = 0;
-        p.controls.right.downs = 0;
-        p.controls.up.downs = 0;
-        p.controls.down.downs = 0;
-        p.controls.jump.downs = 0;
+        player.controls.left.downs = 0;
+        player.controls.right.downs = 0;
+        player.controls.up.downs = 0;
+        player.controls.down.downs = 0;
+        player.controls.jump.downs = 0;
     }
-    
-    //collision resolution:
-    for (auto &p1: players) {
-        //player/player collisions:
-        for (auto &p2: players) {
-            if (&p1 == &p2) break;
-            glm::vec2 p12 = p2.position - p1.position;
-            float len2 = glm::length2(p12);
-            if (len2 > (2.0f * PlayerRadius) * (2.0f * PlayerRadius)) continue;
-            if (len2 == 0.0f) continue;
-            glm::vec2 dir = p12 / std::sqrt(len2);
-            //mirror velocity to be in separating direction:
-            glm::vec2 v12 = p2.velocity - p1.velocity;
-            glm::vec2 delta_v12 = dir * glm::max(0.0f, -1.75f * glm::dot(dir, v12));
-            p2.velocity += 0.5f * delta_v12;
-            p1.velocity -= 0.5f * delta_v12;
-        }
-        //player/arena collisions:
-        if (p1.position.x < ArenaMin.x + PlayerRadius) {
-            p1.position.x = ArenaMin.x + PlayerRadius;
-            p1.velocity.x = std::abs(p1.velocity.x);
-        }
-        if (p1.position.x > ArenaMax.x - PlayerRadius) {
-            p1.position.x = ArenaMax.x - PlayerRadius;
-            p1.velocity.x = -std::abs(p1.velocity.x);
-        }
-        if (p1.position.y < ArenaMin.y + PlayerRadius) {
-            p1.position.y = ArenaMin.y + PlayerRadius;
-            p1.velocity.y = std::abs(p1.velocity.y);
-        }
-        if (p1.position.y > ArenaMax.y - PlayerRadius) {
-            p1.position.y = ArenaMax.y - PlayerRadius;
-            p1.velocity.y = -std::abs(p1.velocity.y);
-        }
-    }
-    
 }
 
 
@@ -209,8 +220,8 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
     
     //send player info helper:
     auto send_player = [&](Player const &player) {
-        connection.send(player.position);
-        connection.send(player.velocity);
+        connection.send(player.at);
+        connection.send(player.rotation);
         connection.send(player.color);
         
         //NOTE: can't just 'send(name)' because player.name is not plain-old-data type.
@@ -264,8 +275,8 @@ bool Game::recv_state_message(Connection *connection_) {
     for (uint8_t i = 0; i < player_count; ++i) {
         players.emplace_back();
         Player &player = players.back();
-        read(&player.position);
-        read(&player.velocity);
+        read(&player.at);
+        read(&player.rotation);
         read(&player.color);
         uint8_t name_len;
         read(&name_len);

@@ -1,5 +1,9 @@
 #pragma once
 
+#include "WalkMesh.hpp"
+#include "Load.hpp"
+#include "data_path.hpp"
+
 #include <glm/glm.hpp>
 
 #include <string>
@@ -28,6 +32,7 @@ struct Button {
 struct Player {
     //player inputs (sent from client):
     struct Controls {
+        // TODO: remove jump
         Button left, right, up, down, jump;
         
         void send_controls_message(Connection *connection) const;
@@ -39,8 +44,9 @@ struct Player {
     } controls;
     
     //player state (sent from server):
-    glm::vec2 position = glm::vec2(0.0f, 0.0f);
-    glm::vec2 velocity = glm::vec2(0.0f, 0.0f);
+    WalkPoint at;
+    // TODO: make this rotate with mouse
+    glm::quat rotation;
     
     glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
     std::string name;
@@ -53,6 +59,8 @@ struct Game {
     
     std::mt19937 mt; //used for spawning players
     uint32_t next_player_number = 1; //used for naming players
+    
+    WalkMesh const *walkmesh;
     
     Game();
     
