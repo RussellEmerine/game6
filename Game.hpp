@@ -32,8 +32,8 @@ struct Button {
 struct Player {
     //player inputs (sent from client):
     struct Controls {
-        // TODO: remove jump
-        Button left, right, up, down, jump;
+        Button left, right, up, down;
+        float mousex = 0.0f;
         
         void send_controls_message(Connection *connection) const;
         

@@ -80,6 +80,12 @@ struct Connection {
                            reinterpret_cast< uint8_t const * >(data) + size);
     }
     
+    template<typename T>
+    void recv(size_t index, T &t) {
+        auto const *ptr = reinterpret_cast<T const *>(&recv_buffer[index]);
+        t = *ptr;
+    }
+    
     //Call 'close' to mark a connection for discard:
     void close();
     

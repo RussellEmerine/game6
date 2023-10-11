@@ -15,7 +15,7 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
     assert(connection_);
     auto &connection = *connection_;
     
-    uint32_t size = 5;
+    uint32_t size = 4 + sizeof(float);
     connection.send(Message::C2S_Controls);
     connection.send(uint8_t(size));
     connection.send(uint8_t(size >> 8));
@@ -32,7 +32,7 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
     send_button(right);
     send_button(up);
     send_button(down);
-    send_button(jump);
+    connection.send(mousex);
 }
 
 bool Player::Controls::recv_controls_message(Connection *connection_) {
@@ -47,7 +47,9 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
     uint32_t size = (uint32_t(recv_buffer[3]) << 16)
                     | (uint32_t(recv_buffer[2]) << 8)
                     | uint32_t(recv_buffer[1]);
-    if (size != 5) throw std::runtime_error("Controls message with size " + std::to_string(size) + " != 5!");
+    if (size != 4 + sizeof(float))
+        throw std::runtime_error(
+                "Controls message with size " + std::to_string(size) + " != 4 + sizeof(float) + sizeof(float)!");
     
     //expecting complete message:
     if (recv_buffer.size() < 4 + size) return false;
@@ -66,7 +68,11 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
     recv_button(recv_buffer[4 + 1], &right);
     recv_button(recv_buffer[4 + 2], &up);
     recv_button(recv_buffer[4 + 3], &down);
-    recv_button(recv_buffer[4 + 4], &jump);
+    {
+        float delta;
+        connection.recv(4 + 4, delta);
+        mousex += delta;
+    }
     
     //delete message from buffer:
     recv_buffer.erase(recv_buffer.begin(), recv_buffer.begin() + 4 + size);
@@ -187,7 +193,7 @@ void Game::update(float elapsed) {
         // game5 code updates transform position here, we don't to that
         // since the client will update position based on sent walkpoints
         
-        // update the rotation, this has to sent
+        // update the rotation due to moving across triangles, this has to sent
         {
             glm::quat adjust = glm::rotation(
                     player.rotation * glm::vec3(0.0f, 0.0f, 1.0f), //current up vector
@@ -196,12 +202,22 @@ void Game::update(float elapsed) {
             player.rotation = glm::normalize(adjust * player.rotation);
         }
         
+        // but also update the rotation according to the input (this is only the yaw, since pitch is handled by the client)
+        {
+            // TODO: make mouse speed a constant
+            // TODO: the game5 base code uses player.camera->fovy, maybe want to use that instead somehow
+            player.rotation = glm::angleAxis(
+                    -1.2f * player.controls.mousex,
+                    walkmesh->to_world_smooth_normal(player.at)
+            ) * player.rotation;
+        }
+        
         //reset 'downs' since controls have been handled:
         player.controls.left.downs = 0;
         player.controls.right.downs = 0;
         player.controls.up.downs = 0;
         player.controls.down.downs = 0;
-        player.controls.jump.downs = 0;
+        player.controls.mousex = 0;
     }
 }
 
