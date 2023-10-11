@@ -10,6 +10,13 @@
 #include <algorithm>
 #include <string>
 
+/*
+ * The following code was mostly written by myself, but checked against
+ * Michael Stroucken (stroucki) and
+ * Sirui (Ray) Huang (siruih)'s implementations from class,
+ * as well as Nellie Tonev (ntonve)'s implementation
+ */
+
 WalkMesh::WalkMesh(std::vector<glm::vec3> const &vertices_, std::vector<glm::vec3> const &normals_,
                    std::vector<glm::uvec3> const &triangles_)
         : vertices(vertices_), normals(normals_), triangles(triangles_) {
@@ -186,13 +193,14 @@ bool WalkMesh::cross_edge(WalkPoint const &start, WalkPoint *end_, glm::quat *ro
     assert(start.weights.z == 0.0f); //*must* be on an edge.
     
     //check if 'edge' is a non-boundary edge:
-    if (next_vertex.count(glm::uvec2(start.indices.y, start.indices.x))) {
+    auto pair = next_vertex.find(glm::uvec2(start.indices.y, start.indices.x));
+    if (pair != next_vertex.end()) {
         //make 'end' represent the same (world) point, but on triangle (edge.y, edge.x, [other point]):
         end = WalkPoint(
                 glm::uvec3(
                         start.indices.y,
                         start.indices.x,
-                        next_vertex.at(glm::uvec2(start.indices.y, start.indices.x))
+                        pair->second
                 ),
                 glm::vec3(
                         start.weights.y,
@@ -207,8 +215,8 @@ bool WalkMesh::cross_edge(WalkPoint const &start, WalkPoint *end_, glm::quat *ro
                 vertices[start.indices.y] - vertices[start.indices.z]
         ));
         glm::vec3 end_norm = glm::normalize(glm::cross(
-                vertices[end.indices.y] - vertices[end.indices.z],
-                vertices[end.indices.x] - vertices[end.indices.z]
+                vertices[end.indices.x] - vertices[end.indices.z],
+                vertices[end.indices.y] - vertices[end.indices.z]
         ));
         
         rotation = glm::rotation(start_norm, end_norm);
