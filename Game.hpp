@@ -28,34 +28,40 @@ struct Button {
     bool pressed = false; //is the button pressed now
 };
 
-//state of one player in the game:
+// state of one player in the game:
 struct Player {
-    //player inputs (sent from client):
+    // player inputs (sent from client):
     struct Controls {
         Button left, right, up, down;
         float mousex = 0.0f;
         
         void send_controls_message(Connection *connection) const;
         
-        //returns 'false' if no message or not a controls message,
-        //returns 'true' if read a controls message,
-        //throws on malformed controls message
+        // returns 'false' if no message or not a controls message,
+        // returns 'true' if read a controls message,
+        // throws on malformed controls message
         bool recv_controls_message(Connection *connection);
     } controls;
     
-    //player state (sent from server):
+    // player state (sent from server):
     WalkPoint at;
-    // TODO: make this rotate with mouse
     glm::quat rotation;
-    
-    glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
     std::string name;
 };
 
+// state of one sheep in the game
+struct Sheep {
+    WalkPoint at;
+    glm::quat rotation;
+};
+
 struct Game {
-    std::list<Player> players; //(using list so they can have stable addresses)
-    Player *spawn_player(); //add player the end of the players list (may also, e.g., play some spawn anim)
-    void remove_player(Player *); //remove player from game (may also, e.g., play some despawn anim)
+    std::list<Player> players; // (using list so they can have stable addresses)
+    Player *spawn_player(); // add player the end of the players list (may also, e.g., play some spawn anim)
+    void remove_player(Player *); // remove player from game (may also, e.g., play some despawn anim)
+    
+    inline static constexpr size_t SheepCount = 15;
+    std::list<Sheep> sheeps;
     
     std::mt19937 mt; //used for spawning players
     uint32_t next_player_number = 1; //used for naming players
@@ -76,10 +82,11 @@ struct Game {
     inline static constexpr glm::vec2 ArenaMax = glm::vec2(0.75f, 1.0f);
     
     //player constants:
-    inline static constexpr float PlayerRadius = 0.06f;
-    inline static constexpr float PlayerSpeed = 2.0f;
-    inline static constexpr float PlayerAccelHalflife = 0.25f;
     
+    inline static constexpr float PlayerSpeed = 2.0f;
+    
+    // used to detect when to hide players that are too close to yourself
+    inline static constexpr float PlayerRadius = 1.06f;
     
     //---- communication helpers ----
     

@@ -25,7 +25,7 @@ Load<MeshBuffer> world_meshes(LoadTagDefault, []() -> MeshBuffer const * {
     return ret;
 });
 
-Scene::Drawable::Pipeline player_pipeline;
+Scene::Drawable::Pipeline player_pipeline, sheep_pipeline;
 Load<Scene> world_scene(LoadTagDefault, []() -> Scene const * {
     return new Scene(
             data_path("world.scene"),
@@ -38,10 +38,10 @@ Load<Scene> world_scene(LoadTagDefault, []() -> Scene const * {
                 pipeline.start = mesh.start;
                 pipeline.count = mesh.count;
                 
-                // TODO: add sheep case
                 if (transform->name == "Player") {
                     player_pipeline = pipeline;
-                    // don't need to keep the transform since those come from the server
+                } else if (transform->name == "Sheep") {
+                    sheep_pipeline = pipeline;
                 } else {
                     scene.drawables.emplace_back(transform);
                     scene.drawables.back().pipeline = pipeline;
@@ -186,15 +186,16 @@ void PlayMode::update(float elapsed) {
     // Draw the other players
     // maybe it's a little slow to do this each frame - but whatever, computers are fast these days
     scene.drawables.remove_if([](Scene::Drawable &drawable) {
-        return drawable.transform->name == "Player";
+        return drawable.transform->name == "Player" || drawable.transform->name == "Sheep";
     });
     scene.transforms.remove_if([](Scene::Transform &transform) {
-        return transform.name == "Player";
+        return transform.name == "Player" || transform.name == "Sheep";
     });
     
     for (Player &p: game.players) {
         // only display players that aren't too close to myself, basic attempt to avoid ugliness of being inside other things
-        if (glm::distance(game.walkmesh->to_world_point(player.at), game.walkmesh->to_world_point(p.at)) > 1.0) {
+        if (glm::distance(game.walkmesh->to_world_point(player.at), game.walkmesh->to_world_point(p.at))
+            > Game::PlayerRadius) {
             scene.transforms.emplace_back();
             Scene::Transform &transform = scene.transforms.back();
             transform.name = "Player";
@@ -204,6 +205,22 @@ void PlayMode::update(float elapsed) {
             scene.drawables.emplace_back(&transform);
             Scene::Drawable &drawable = scene.drawables.back();
             drawable.pipeline = player_pipeline;
+        }
+    }
+    
+    for (Sheep &sheep: game.sheeps) {
+        // only display sheep that aren't too close to myself, basic attempt to avoid ugliness of being inside other things
+        if (glm::distance(game.walkmesh->to_world_point(player.at), game.walkmesh->to_world_point(sheep.at))
+            > Game::PlayerRadius) {
+            scene.transforms.emplace_back();
+            Scene::Transform &transform = scene.transforms.back();
+            transform.name = "Sheep";
+            transform.position = game.walkmesh->to_world_point(sheep.at);
+            transform.rotation = sheep.rotation;
+            
+            scene.drawables.emplace_back(&transform);
+            Scene::Drawable &drawable = scene.drawables.back();
+            drawable.pipeline = sheep_pipeline;
         }
     }
 }

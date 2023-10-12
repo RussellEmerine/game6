@@ -8,8 +8,19 @@
 #include <stdexcept>
 #include <iostream>
 #include <cstring>
+#include <ctime>
 
 #include <glm/gtx/norm.hpp>
+
+// TODO: adjust the bounds to the walkmesh
+// this really shouldn't be done like this but i'd have to do work to actually make right
+glm::vec3 random_coordinates(std::mt19937 &mt) {
+    return {
+            float(mt()) / float(std::mt19937::max()) * 30.0f - 5.0f,
+            float(mt()) / float(std::mt19937::max()) * 10.0f - 5.0f,
+            float(mt()) / float(std::mt19937::max()) * 20.0f - 10.0f
+    };
+}
 
 void Player::Controls::send_controls_message(Connection *connection_) const {
     assert(connection_);
@@ -86,33 +97,38 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 // moved this out of a load that would have to be in a header to avoid linker errors
 WalkMeshes const *world_walkmeshes = nullptr;
 
-Game::Game() : mt(0x15466666) {
+Game::Game() : mt(std::time(nullptr)) {
+    // clang-tidy doesn't like how i initialize the rng, interesting
     if (world_walkmeshes == nullptr) {
         world_walkmeshes = new WalkMeshes(data_path("world.w"));
     }
     
     walkmesh = &world_walkmeshes->lookup("WalkMesh");
     assert(walkmesh && "walkmesh not initialized");
+    
+    for (size_t i = 0; i < SheepCount; i++) {
+        sheeps.emplace_back();
+        Sheep &sheep = sheeps.back();
+        
+        sheep.at = walkmesh->nearest_walk_point(random_coordinates(mt));
+        // TODO: randomize the angle
+        sheep.rotation = glm::rotation(
+                glm::vec3(0.0f, 0.0f, 1.0f),
+                walkmesh->to_world_smooth_normal(sheep.at)
+        );
+    }
 }
 
 Player *Game::spawn_player() {
     players.emplace_back();
     Player &player = players.back();
     
-    // TODO: make this randomized
-    player.at = walkmesh->nearest_walk_point(glm::vec3(0, 0, 0));
+    player.at = walkmesh->nearest_walk_point(random_coordinates(mt));
     // TODO: randomize the angle
     player.rotation = glm::rotation(
             glm::vec3(0.0f, 0.0f, 1.0f),
             walkmesh->to_world_smooth_normal(player.at)
     );
-    
-    do {
-        player.color.r = float(mt()) / float(std::mt19937::max());
-        player.color.g = float(mt()) / float(std::mt19937::max());
-        player.color.b = float(mt()) / float(std::mt19937::max());
-    } while (player.color == glm::vec3(0.0f));
-    player.color = glm::normalize(player.color);
     
     player.name = "ClientPlayer " + std::to_string(next_player_number++);
     
@@ -142,8 +158,7 @@ void Game::update(float elapsed) {
         if (player.controls.up.pressed) move.y += 1.0f;
         
         if (glm::length(move) > 0) {
-            // TODO: make player speed a constant
-            move = glm::normalize(move) * 2.0f * elapsed;
+            move = glm::normalize(move) * PlayerSpeed * elapsed;
         }
         
         glm::vec3 remain = player.rotation * move;
@@ -219,6 +234,8 @@ void Game::update(float elapsed) {
         player.controls.down.downs = 0;
         player.controls.mousex = 0;
     }
+    
+    // TODO: sheep movement
 }
 
 
@@ -238,7 +255,6 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
     auto send_player = [&](Player const &player) {
         connection.send(player.at);
         connection.send(player.rotation);
-        connection.send(player.color);
         
         //NOTE: can't just 'send(name)' because player.name is not plain-old-data type.
         //effectively: truncates player name to 255 chars
@@ -253,6 +269,12 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
     for (auto const &player: players) {
         if (&player == connection_player) continue;
         send_player(player);
+    }
+    
+    connection.send(uint8_t(sheeps.size()));
+    for (auto const &sheep: sheeps) {
+        connection.send(sheep.at);
+        connection.send(sheep.rotation);
     }
     
     //compute the message size and patch into the message header:
@@ -293,7 +315,6 @@ bool Game::recv_state_message(Connection *connection_) {
         Player &player = players.back();
         read(&player.at);
         read(&player.rotation);
-        read(&player.color);
         uint8_t name_len;
         read(&name_len);
         //n.b. would probably be more efficient to directly copy from recv_buffer, but I think this is clearer:
@@ -303,6 +324,16 @@ bool Game::recv_state_message(Connection *connection_) {
             read(&c);
             player.name += c;
         }
+    }
+    
+    sheeps.clear();
+    uint8_t sheep_count;
+    read(&sheep_count);
+    for (uint8_t i = 0; i < sheep_count; ++i) {
+        sheeps.emplace_back();
+        Sheep &sheep = sheeps.back();
+        read(&sheep.at);
+        read(&sheep.rotation);
     }
     
     if (at != size) throw std::runtime_error("Trailing data in state message.");
