@@ -14,7 +14,7 @@
  * The following code was mostly written by myself, but checked against
  * Michael Stroucken (stroucki) and
  * Sirui (Ray) Huang (siruih)'s implementations from class,
- * as well as Nellie Tonev (ntonve)'s implementation
+ * as well as Nellie Tonev (ntonev)'s implementation
  */
 
 WalkMesh::WalkMesh(std::vector<glm::vec3> const &vertices_, std::vector<glm::vec3> const &normals_,

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cassert>
 #include <unordered_map>
+#include <chrono>
 
 #ifdef _WIN32
 extern "C" { uint32_t GetACP(); }
