@@ -2,7 +2,6 @@
 
 #include "WalkMesh.hpp"
 #include "Load.hpp"
-#include "data_path.hpp"
 
 #include <glm/glm.hpp>
 
@@ -12,20 +11,19 @@
 
 struct Connection;
 
-//Game state, separate from rendering.
+// Game state, separate from rendering.
 
-//Currently set up for a "client sends controls" / "server sends whole state" situation.
+// Currently set up for a "client sends controls" / "server sends whole state" situation.
 
 enum class Message : uint8_t {
-    C2S_Controls = 1, //Greg!
+    C2S_Controls = 1, // Greg!         jim i don't get it, what does greg mean
     S2C_State = 's',
-    //...
 };
 
-//used to represent a control input:
+// used to represent a control input:
 struct Button {
-    uint8_t downs = 0; //times the button has been pressed
-    bool pressed = false; //is the button pressed now
+    uint8_t downs = 0; // times the button has been pressed
+    bool pressed = false; // is the button pressed now
 };
 
 // state of one player in the game:
@@ -55,6 +53,13 @@ struct Sheep {
     WalkPoint at;
     glm::quat rotation;
     
+    /*
+     * Note: the rotations for the players and the sheep work differently. For sheep, forwards is
+     * on the mesh x-axis, while for players, forwards is on the mesh y-axis. I'm sure there's an
+     * obvious reason for this in the code, but I just fixed it by rotating the model in blender.
+     * If this game is to be expanded into something more complete, this should be investigated.
+     */
+    
     // the rest is unused by clients, only on server side
     
     // a random direction to go if there's nothing nearby
@@ -69,18 +74,18 @@ struct Game {
     
     std::list<Sheep> sheeps;
     
-    std::mt19937 mt; //used for spawning players
-    uint32_t next_player_number = 1; //used for naming players
+    std::mt19937 mt; // used for spawning players
+    uint32_t next_player_number = 1; // used for naming players
     
     WalkMesh const *walkmesh;
     
     Game();
     
-    //state update function:
+    // state update function:
     void update(float elapsed);
     
-    //constants:
-    //the update rate on the server:
+    // constants:
+    // the update rate on the server:
     inline static constexpr float Tick = 1.0f / 30.0f;
     
     // player constants:
@@ -97,16 +102,23 @@ struct Game {
     inline static constexpr float SheepAvoidPlayerConstant = 60.0f;
     inline static constexpr float SheepDetectSheepRadius = 2.0f;
     inline static constexpr float SheepAvoidSheepConstant = 30.0f;
+    inline static constexpr float SheepSpeed = 1.5f;
     
-    //---- communication helpers ----
+    // ---- communication helpers ----
     
-    //used by client:
-    //set game state from data in connection buffer
+    // used by client:
+    // set game state from data in connection buffer
     // (return true if data was read)
     bool recv_state_message(Connection *connection);
     
-    //used by server:
-    //send game state.
+    // used by server:
+    // send game state.
     //  Will move "connection_player" to the front of the front of the sent list.
     void send_state_message(Connection *connection, Player *connection_player = nullptr) const;
+    
+    // used for spawning things randomly
+    glm::vec3 min_bound = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 max_bound = glm::vec3(0.0f, 0.0f, 0.0f);
+    
+    glm::vec3 random_coordinates();
 };

@@ -3,7 +3,6 @@
 #include "DrawLines.hpp"
 #include "gl_errors.hpp"
 #include "data_path.hpp"
-#include "hex_dump.hpp"
 
 #include "Scene.hpp"
 #include "Mesh.hpp"
@@ -13,9 +12,7 @@
 #include "LitColorTextureProgram.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
 
-#include <random>
 #include <array>
 
 GLuint world_meshes_for_lit_color_texture_program = 0;
@@ -223,6 +220,25 @@ void PlayMode::update(float elapsed) {
             drawable.pipeline = sheep_pipeline;
         }
     }
+    
+    float max_distance = 0;
+    for (Sheep &sheep: game.sheeps) {
+        for (Sheep &other: game.sheeps) {
+            max_distance = glm::max(
+                    max_distance,
+                    glm::distance(
+                            game.walkmesh->to_world_point(sheep.at),
+                            game.walkmesh->to_world_point(other.at)
+                    )
+            );
+        }
+    }
+    
+    color = glm::mix(
+            glm::vec3(0.1f, 0.3f, 0.9f),
+            glm::vec3(0.5f, 0.5f, 0.5f),
+            max_distance / glm::distance(game.min_bound, game.max_bound)
+    );
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
@@ -231,14 +247,13 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
     player.camera->aspect = float(drawable_size.x) / float(drawable_size.y);
     
     //set up light type and position for lit_color_texture_program:
-    // TODO: consider using the Light(s) in the scene to do this
     glUseProgram(lit_color_texture_program->program);
     glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
     glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, -1.0f)));
     glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
     glUseProgram(0);
     
-    glClearColor(0.1f, 0.3f, 0.9f, 1.0f);
+    glClearColor(color.r, color.g, color.b, 1.0f);
     glClearDepth(1.0f); //1.0 is actually the default value to clear the depth buffer to, but FYI you can change it.
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
@@ -247,38 +262,5 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
     
     scene.draw(*player.camera);
     
-    /* In case you are wondering if your walkmesh is lining up with your scene, try:
-    {
-        glDisable(GL_DEPTH_TEST);
-        DrawLines lines(player.camera->make_projection() * glm::mat4(player.camera->transform->make_world_to_local()));
-        for (auto const &tri : walkmesh->triangles) {
-            lines.draw(walkmesh->vertices[tri.x], walkmesh->vertices[tri.y], glm::u8vec4(0x88, 0x00, 0xff, 0xff));
-            lines.draw(walkmesh->vertices[tri.y], walkmesh->vertices[tri.z], glm::u8vec4(0x88, 0x00, 0xff, 0xff));
-            lines.draw(walkmesh->vertices[tri.z], walkmesh->vertices[tri.x], glm::u8vec4(0x88, 0x00, 0xff, 0xff));
-        }
-    }
-    */
-    
-    { //use DrawLines to overlay some text:
-        glDisable(GL_DEPTH_TEST);
-        float aspect = float(drawable_size.x) / float(drawable_size.y);
-        DrawLines lines(glm::mat4(
-                1.0f / aspect, 0.0f, 0.0f, 0.0f,
-                0.0f, 1.0f, 0.0f, 0.0f,
-                0.0f, 0.0f, 1.0f, 0.0f,
-                0.0f, 0.0f, 0.0f, 1.0f
-        ));
-        
-        constexpr float H = 0.09f;
-        lines.draw_text("Mouse motion looks; WASD moves; escape ungrabs mouse",
-                        glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-                        glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-                        glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-        float ofs = 2.0f / drawable_size.y;
-        lines.draw_text("Mouse motion looks; WASD moves; escape ungrabs mouse",
-                        glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + +0.1f * H + ofs, 0.0),
-                        glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-                        glm::u8vec4(0xff, 0xff, 0xff, 0x00));
-    }
     GL_ERRORS();
 }

@@ -12,16 +12,6 @@
 
 #include <glm/gtx/norm.hpp>
 
-// TODO: adjust the bounds to the walkmesh
-// this really shouldn't be done like this but i'd have to do work to actually make right
-glm::vec3 random_coordinates(std::mt19937 &mt) {
-    return {
-            float(mt()) / float(std::mt19937::max()) * 30.0f - 5.0f,
-            float(mt()) / float(std::mt19937::max()) * 15.0f - 10.0f,
-            float(mt()) / float(std::mt19937::max()) * 20.0f - 10.0f
-    };
-}
-
 void Player::Controls::send_controls_message(Connection *connection_) const {
     assert(connection_);
     auto &connection = *connection_;
@@ -106,11 +96,16 @@ Game::Game() : mt((unsigned int) std::time(nullptr)) {
     walkmesh = &world_walkmeshes->lookup("WalkMesh");
     assert(walkmesh && "walkmesh not initialized");
     
+    for (glm::vec3 vertex: walkmesh->vertices) {
+        min_bound = glm::min(min_bound, vertex);
+        max_bound = glm::max(max_bound, vertex);
+    }
+    
     for (size_t i = 0; i < SheepCount; i++) {
         sheeps.emplace_back();
         Sheep &sheep = sheeps.back();
         
-        sheep.at = walkmesh->nearest_walk_point(random_coordinates(mt));
+        sheep.at = walkmesh->nearest_walk_point(random_coordinates());
         sheep.rotation =
                 glm::rotation(
                         glm::vec3(0.0f, 0.0f, 1.0f),
@@ -124,11 +119,19 @@ Game::Game() : mt((unsigned int) std::time(nullptr)) {
     }
 }
 
+glm::vec3 Game::random_coordinates() {
+    return {
+            float(mt()) / float(std::mt19937::max()) * (max_bound.x - min_bound.x) + min_bound.x,
+            float(mt()) / float(std::mt19937::max()) * (max_bound.y - min_bound.y) + min_bound.y,
+            float(mt()) / float(std::mt19937::max()) * (max_bound.z - min_bound.z) + min_bound.z
+    };
+}
+
 Player *Game::spawn_player() {
     players.emplace_back();
     Player &player = players.back();
     
-    player.at = walkmesh->nearest_walk_point(random_coordinates(mt));
+    player.at = walkmesh->nearest_walk_point(random_coordinates());
     player.rotation =
             glm::rotation(
                     glm::vec3(0.0f, 0.0f, 1.0f),
@@ -254,7 +257,7 @@ void Game::update(float elapsed) {
     for (auto &sheep: sheeps) {
         if (mt() % 60 == 0) {
             do {
-                sheep.bias = random_coordinates(mt) - walkmesh->to_world_point(sheep.at);
+                sheep.bias = random_coordinates() - walkmesh->to_world_point(sheep.at);
             } while (glm::length(sheep.bias) < 0.1f);
             sheep.bias = glm::normalize(sheep.bias);
         }
@@ -310,7 +313,7 @@ void Game::update(float elapsed) {
         // now try to move (sheep can only move forwards)
         desired.y = 0.0f;
         if (desired.x > 0.0f) {
-            desired.x = glm::min(desired.x, PlayerSpeed) * elapsed;
+            desired.x = glm::min(desired.x, SheepSpeed) * elapsed;
             glm::vec3 remain = sheep.rotation * desired;
             
             update_position(walkmesh, sheep.at, remain);

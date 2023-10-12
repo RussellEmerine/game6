@@ -64,9 +64,9 @@ int main(int argc, char **argv) {
     
     //create window:
     SDL_Window *window = SDL_CreateWindow(
-            "gp23 game6: multiplayer", //TODO: remember to set a title for your game!
+            "3D Herding",
             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-            1280, 720, //TODO: modify window size if you'd like
+            1280, 720,
             SDL_WINDOW_OPENGL
             | SDL_WINDOW_RESIZABLE //uncomment to allow resizing
             | SDL_WINDOW_ALLOW_HIGHDPI //uncomment for full resolution on high-DPI screens
