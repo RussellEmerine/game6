@@ -93,8 +93,8 @@ struct Game {
     
     // sheep constants
     inline static constexpr size_t SheepCount = 15;
-    inline static constexpr float SheepDetectPlayerRadius = 15.0f;
-    inline static constexpr float SheepAvoidPlayerConstant = 100.0f;
+    inline static constexpr float SheepDetectPlayerRadius = 12.0f;
+    inline static constexpr float SheepAvoidPlayerConstant = 60.0f;
     inline static constexpr float SheepDetectSheepRadius = 2.0f;
     inline static constexpr float SheepAvoidSheepConstant = 30.0f;
     

@@ -97,7 +97,7 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 // moved this out of a load that would have to be in a header to avoid linker errors
 WalkMeshes const *world_walkmeshes = nullptr;
 
-Game::Game() : mt(std::time(nullptr)) {
+Game::Game() : mt((unsigned int) std::time(nullptr)) {
     // clang-tidy doesn't like how i initialize the rng, interesting
     if (world_walkmeshes == nullptr) {
         world_walkmeshes = new WalkMeshes(data_path("world.w"));
