@@ -25,29 +25,32 @@ Load<MeshBuffer> world_meshes(LoadTagDefault, []() -> MeshBuffer const * {
     return ret;
 });
 
-// TODO: merge this with the world_scene in Game.hpp
+Scene::Drawable::Pipeline player_pipeline;
 Load<Scene> world_scene(LoadTagDefault, []() -> Scene const * {
     return new Scene(
             data_path("world.scene"),
             [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name) {
                 Mesh const &mesh = world_meshes->lookup(mesh_name);
                 
-                scene.drawables.emplace_back(transform);
-                Scene::Drawable &drawable = scene.drawables.back();
+                Scene::Drawable::Pipeline pipeline = lit_color_texture_program_pipeline;
+                pipeline.vao = world_meshes_for_lit_color_texture_program;
+                pipeline.type = mesh.type;
+                pipeline.start = mesh.start;
+                pipeline.count = mesh.count;
                 
-                drawable.pipeline = lit_color_texture_program_pipeline;
-                
-                drawable.pipeline.vao = world_meshes_for_lit_color_texture_program;
-                drawable.pipeline.type = mesh.type;
-                drawable.pipeline.start = mesh.start;
-                drawable.pipeline.count = mesh.count;
-                
+                // TODO: add sheep case
+                if (transform->name == "Player") {
+                    player_pipeline = pipeline;
+                    // don't need to keep the transform since those come from the server
+                } else {
+                    scene.drawables.emplace_back(transform);
+                    scene.drawables.back().pipeline = pipeline;
+                }
             });
 });
 
 PlayMode::PlayMode(Client &client_) : client(client_), scene(*world_scene) {
     // create a player transform:
-    // TODO: change to multiple players
     scene.transforms.emplace_back();
     player.transform = &scene.transforms.back();
     
@@ -72,7 +75,6 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*world_scene) {
 PlayMode::~PlayMode() = default;
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
-    
     if (evt.type == SDL_KEYDOWN) {
         if (evt.key.repeat) {
             //ignore repeats
@@ -141,7 +143,6 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-    
     //queue data for sending to server:
     controls.send_controls_message(&client.connection);
     
@@ -176,10 +177,35 @@ void PlayMode::update(float elapsed) {
         }
     }, 0.0);
     
-    // TODO: loop through game players and filter on name
-    player.at = game.players.back().at;
+    // Set my own position
+    // The server always sends with the current player first
+    player.at = game.players.front().at;
     player.transform->position = game.walkmesh->to_world_point(player.at);
-    player.transform->rotation = game.players.back().rotation;
+    player.transform->rotation = game.players.front().rotation;
+    
+    // Draw the other players
+    // maybe it's a little slow to do this each frame - but whatever, computers are fast these days
+    scene.drawables.remove_if([](Scene::Drawable &drawable) {
+        return drawable.transform->name == "Player";
+    });
+    scene.transforms.remove_if([](Scene::Transform &transform) {
+        return transform.name == "Player";
+    });
+    
+    for (Player &p: game.players) {
+        // only display players that aren't too close to myself, basic attempt to avoid ugliness of being inside other things
+        if (glm::distance(game.walkmesh->to_world_point(player.at), game.walkmesh->to_world_point(p.at)) > 1.0) {
+            scene.transforms.emplace_back();
+            Scene::Transform &transform = scene.transforms.back();
+            transform.name = "Player";
+            transform.position = game.walkmesh->to_world_point(p.at);
+            transform.rotation = p.rotation;
+            
+            scene.drawables.emplace_back(&transform);
+            Scene::Drawable &drawable = scene.drawables.back();
+            drawable.pipeline = player_pipeline;
+        }
+    }
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {

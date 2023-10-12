@@ -23,10 +23,10 @@ all : \
 	$(DIST)/world.scene \
 
 $(DIST)/world.pnct : world.blend $(EXPORT_MESHES)
-	$(BLENDER) --background --python $(EXPORT_MESHES) -- '$<':Platforms '$@'
+	$(BLENDER) --background --python $(EXPORT_MESHES) -- '$<':Main '$@'
 
 $(DIST)/world.scene : world.blend $(EXPORT_SCENE)
-	$(BLENDER) --background --python $(EXPORT_SCENE) -- '$<':Platforms '$@'
+	$(BLENDER) --background --python $(EXPORT_SCENE) -- '$<':Main '$@'
 
 $(DIST)/world.w : world.blend $(EXPORT_WALKMESHES)
 	$(BLENDER) --background --python $(EXPORT_WALKMESHES) -- '$<':WalkMeshes '$@'
