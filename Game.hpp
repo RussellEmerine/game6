@@ -51,8 +51,15 @@ struct Player {
 
 // state of one sheep in the game
 struct Sheep {
+    // sheep state (sent from server):
     WalkPoint at;
     glm::quat rotation;
+    
+    // the rest is unused by clients, only on server side
+    
+    // a random direction to go if there's nothing nearby
+    // gets updated to a random value at random intervals, with average update time every 60 ticks
+    glm::vec3 bias;
 };
 
 struct Game {
@@ -60,7 +67,6 @@ struct Game {
     Player *spawn_player(); // add player the end of the players list (may also, e.g., play some spawn anim)
     void remove_player(Player *); // remove player from game (may also, e.g., play some despawn anim)
     
-    inline static constexpr size_t SheepCount = 15;
     std::list<Sheep> sheeps;
     
     std::mt19937 mt; //used for spawning players
@@ -77,16 +83,20 @@ struct Game {
     //the update rate on the server:
     inline static constexpr float Tick = 1.0f / 30.0f;
     
-    //arena size:
-    inline static constexpr glm::vec2 ArenaMin = glm::vec2(-0.75f, -1.0f);
-    inline static constexpr glm::vec2 ArenaMax = glm::vec2(0.75f, 1.0f);
-    
-    //player constants:
+    // player constants:
     
     inline static constexpr float PlayerSpeed = 2.0f;
+    inline static constexpr float MouseSpeed = 1.2f;
     
     // used to detect when to hide players that are too close to yourself
     inline static constexpr float PlayerRadius = 1.06f;
+    
+    // sheep constants
+    inline static constexpr size_t SheepCount = 15;
+    inline static constexpr float SheepDetectPlayerRadius = 15.0f;
+    inline static constexpr float SheepAvoidPlayerConstant = 100.0f;
+    inline static constexpr float SheepDetectSheepRadius = 2.0f;
+    inline static constexpr float SheepAvoidSheepConstant = 30.0f;
     
     //---- communication helpers ----
     

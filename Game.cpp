@@ -17,7 +17,7 @@
 glm::vec3 random_coordinates(std::mt19937 &mt) {
     return {
             float(mt()) / float(std::mt19937::max()) * 30.0f - 5.0f,
-            float(mt()) / float(std::mt19937::max()) * 10.0f - 5.0f,
+            float(mt()) / float(std::mt19937::max()) * 15.0f - 10.0f,
             float(mt()) / float(std::mt19937::max()) * 20.0f - 10.0f
     };
 }
@@ -111,11 +111,16 @@ Game::Game() : mt(std::time(nullptr)) {
         Sheep &sheep = sheeps.back();
         
         sheep.at = walkmesh->nearest_walk_point(random_coordinates(mt));
-        // TODO: randomize the angle
-        sheep.rotation = glm::rotation(
-                glm::vec3(0.0f, 0.0f, 1.0f),
-                walkmesh->to_world_smooth_normal(sheep.at)
-        );
+        sheep.rotation =
+                glm::rotation(
+                        glm::vec3(0.0f, 0.0f, 1.0f),
+                        walkmesh->to_world_smooth_normal(sheep.at)
+                )
+                *
+                glm::angleAxis(
+                        2 * glm::pi<float>() * float(mt()) / float(std::mt19937::max()),
+                        glm::vec3(0.0f, 0.0f, 1.0f)
+                );
     }
 }
 
@@ -124,11 +129,16 @@ Player *Game::spawn_player() {
     Player &player = players.back();
     
     player.at = walkmesh->nearest_walk_point(random_coordinates(mt));
-    // TODO: randomize the angle
-    player.rotation = glm::rotation(
-            glm::vec3(0.0f, 0.0f, 1.0f),
-            walkmesh->to_world_smooth_normal(player.at)
-    );
+    player.rotation =
+            glm::rotation(
+                    glm::vec3(0.0f, 0.0f, 1.0f),
+                    walkmesh->to_world_smooth_normal(player.at)
+            )
+            *
+            glm::angleAxis(
+                    2 * glm::pi<float>() * float(mt()) / float(std::mt19937::max()),
+                    glm::vec3(0.0f, 0.0f, 1.0f)
+            );
     
     player.name = "ClientPlayer " + std::to_string(next_player_number++);
     
@@ -147,9 +157,64 @@ void Game::remove_player(Player *player) {
     assert(found);
 }
 
+// a bit scuffed to have the walkmesh as the first argument but can't be bothered
+void update_position(const WalkMesh *walkmesh, WalkPoint &at, glm::vec3 remain) {
+    for (size_t i = 0; i < 10; i++) {
+        if (remain == glm::vec3(0.0f, 0.0f, 0.0f)) {
+            break;
+        }
+        WalkPoint end;
+        float time;
+        
+        walkmesh->walk_in_triangle(at, remain, &end, &time);
+        at = end;
+        if (time == 1.0f) {
+            remain = glm::vec3(0.0f, 0.0f, 0.0f);
+            break;
+        }
+        remain *= (1.0f - time);
+        glm::quat rotation;
+        if (walkmesh->cross_edge(at, &end, &rotation)) {
+            at = end;
+            remain = rotation * remain;
+        } else {
+            glm::vec3 const &a = walkmesh->vertices[at.indices.x];
+            glm::vec3 const &b = walkmesh->vertices[at.indices.y];
+            glm::vec3 const &c = walkmesh->vertices[at.indices.z];
+            glm::vec3 along = glm::normalize(b - a);
+            glm::vec3 normal = glm::normalize(glm::cross(b - a, c - a));
+            glm::vec3 in = glm::cross(normal, along);
+            
+            // check how much 'remain' is pointing out of the triangle:
+            float d = glm::dot(remain, in);
+            if (d < 0.0f) {
+                // bounce off of the wall:
+                remain += (-1.25f * d) * in;
+            } else {
+                // if it's just pointing along the edge, bend slightly away from wall:
+                remain += 0.01f * d * in;
+            }
+        }
+    }
+    
+    if (remain != glm::vec3(0.0f)) {
+        std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
+    }
+}
+
 void Game::update(float elapsed) {
     //position/velocity update:
     for (auto &player: players) {
+        // update the rotation according to the input (this is only the yaw, since pitch is handled by the client)
+        {
+            // TODO: the game5 base code uses player.camera->fovy, maybe want to use that instead somehow
+            player.rotation = glm::angleAxis(
+                    -MouseSpeed * player.controls.mousex,
+                    walkmesh->to_world_smooth_normal(player.at)
+            ) * player.rotation;
+        }
+        
+        // update the walkpoint
         // part paraphrased, part copied, from game5 base code:
         glm::vec3 move = glm::vec3(0.0f, 0.0f, 0.0f);
         if (player.controls.left.pressed) move.x -= 1.0f;
@@ -163,47 +228,7 @@ void Game::update(float elapsed) {
         
         glm::vec3 remain = player.rotation * move;
         
-        for (size_t i = 0; i < 10; i++) {
-            if (remain == glm::vec3(0.0f, 0.0f, 0.0f)) {
-                break;
-            }
-            WalkPoint end;
-            float time;
-            
-            walkmesh->walk_in_triangle(player.at, remain, &end, &time);
-            player.at = end;
-            if (time == 1.0f) {
-                remain = glm::vec3(0.0f, 0.0f, 0.0f);
-                break;
-            }
-            remain *= (1.0f - time);
-            glm::quat rotation;
-            if (walkmesh->cross_edge(player.at, &end, &rotation)) {
-                player.at = end;
-                remain = rotation * remain;
-            } else {
-                glm::vec3 const &a = walkmesh->vertices[player.at.indices.x];
-                glm::vec3 const &b = walkmesh->vertices[player.at.indices.y];
-                glm::vec3 const &c = walkmesh->vertices[player.at.indices.z];
-                glm::vec3 along = glm::normalize(b - a);
-                glm::vec3 normal = glm::normalize(glm::cross(b - a, c - a));
-                glm::vec3 in = glm::cross(normal, along);
-                
-                // check how much 'remain' is pointing out of the triangle:
-                float d = glm::dot(remain, in);
-                if (d < 0.0f) {
-                    // bounce off of the wall:
-                    remain += (-1.25f * d) * in;
-                } else {
-                    // if it's just pointing along the edge, bend slightly away from wall:
-                    remain += 0.01f * d * in;
-                }
-            }
-        }
-        
-        if (remain != glm::vec3(0.0f)) {
-            std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
-        }
+        update_position(walkmesh, player.at, remain);
         
         // game5 code updates transform position here, we don't to that
         // since the client will update position based on sent walkpoints
@@ -217,16 +242,6 @@ void Game::update(float elapsed) {
             player.rotation = glm::normalize(adjust * player.rotation);
         }
         
-        // but also update the rotation according to the input (this is only the yaw, since pitch is handled by the client)
-        {
-            // TODO: make mouse speed a constant
-            // TODO: the game5 base code uses player.camera->fovy, maybe want to use that instead somehow
-            player.rotation = glm::angleAxis(
-                    -1.2f * player.controls.mousex,
-                    walkmesh->to_world_smooth_normal(player.at)
-            ) * player.rotation;
-        }
-        
         //reset 'downs' since controls have been handled:
         player.controls.left.downs = 0;
         player.controls.right.downs = 0;
@@ -235,7 +250,81 @@ void Game::update(float elapsed) {
         player.controls.mousex = 0;
     }
     
-    // TODO: sheep movement
+    // sheep motion: sheep move away from close players and very close sheep, and towards a randomized bias
+    for (auto &sheep: sheeps) {
+        if (mt() % 60 == 0) {
+            do {
+                sheep.bias = random_coordinates(mt) - walkmesh->to_world_point(sheep.at);
+            } while (glm::length(sheep.bias) < 0.1f);
+            sheep.bias = glm::normalize(sheep.bias);
+        }
+        
+        // start with bias
+        glm::vec3 desired = sheep.bias;
+        
+        // add things by inverse square law
+        for (auto &player: players) {
+            glm::vec3 v = walkmesh->to_world_point(player.at) - walkmesh->to_world_point(sheep.at);
+            // ignore things too close to make a reasonable speed or too far to care about
+            if (0.01f < glm::length(v) && glm::length(v) < SheepDetectPlayerRadius) {
+                desired -= SheepAvoidPlayerConstant * glm::normalize(v) / glm::length2(v);
+            }
+        }
+        
+        for (auto &other: sheeps) {
+            // ignore things too close to make a reasonable speed or too far to care about
+            // (in this case "things too close" includes the sheep itself)
+            glm::vec3 v = walkmesh->to_world_point(other.at) - walkmesh->to_world_point(sheep.at);
+            if (0.01f < glm::length(v) && glm::length(v) < SheepDetectSheepRadius) {
+                desired -= SheepAvoidSheepConstant * glm::normalize(v) / glm::length2(v);
+            }
+        }
+        
+        // project the desired onto the plane, x points forward
+        desired = glm::inverse(sheep.rotation) * desired;
+        desired.z = 0.0f;
+        
+        // try to rotate towards the right direction
+        // (using a really cheap estimate for angle)
+        float turn_amount = 0.05f;
+        if (desired.x > 0.0f && glm::abs(glm::normalize(desired).y) < 0.4f) {
+            turn_amount = 0.025f * glm::abs(glm::normalize(desired).y);
+        }
+        if (glm::abs(glm::normalize(desired).y) < 0.1f) {
+            turn_amount = 0.0f;
+        }
+        if (desired.y < 0.0f) {
+            // rotate clockwise
+            sheep.rotation = glm::angleAxis(
+                    -MouseSpeed * turn_amount,
+                    walkmesh->to_world_smooth_normal(sheep.at)
+            ) * sheep.rotation;
+        } else {
+            // rotate counterclockwise
+            sheep.rotation = glm::angleAxis(
+                    MouseSpeed * turn_amount,
+                    walkmesh->to_world_smooth_normal(sheep.at)
+            ) * sheep.rotation;
+        }
+        
+        // now try to move (sheep can only move forwards)
+        desired.y = 0.0f;
+        if (desired.x > 0.0f) {
+            desired.x = glm::min(desired.x, PlayerSpeed) * elapsed;
+            glm::vec3 remain = sheep.rotation * desired;
+            
+            update_position(walkmesh, sheep.at, remain);
+        }
+        
+        // update the rotation due to moving across triangles, this has to sent
+        {
+            glm::quat adjust = glm::rotation(
+                    sheep.rotation * glm::vec3(0.0f, 0.0f, 1.0f), //current up vector
+                    walkmesh->to_world_smooth_normal(sheep.at) //smoothed up vector at walk location
+            );
+            sheep.rotation = glm::normalize(adjust * sheep.rotation);
+        }
+    }
 }
 
 

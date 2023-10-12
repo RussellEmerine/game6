@@ -192,15 +192,15 @@ void PlayMode::update(float elapsed) {
         return transform.name == "Player" || transform.name == "Sheep";
     });
     
-    for (Player &p: game.players) {
+    for (Player &other: game.players) {
         // only display players that aren't too close to myself, basic attempt to avoid ugliness of being inside other things
-        if (glm::distance(game.walkmesh->to_world_point(player.at), game.walkmesh->to_world_point(p.at))
+        if (glm::distance(game.walkmesh->to_world_point(player.at), game.walkmesh->to_world_point(other.at))
             > Game::PlayerRadius) {
             scene.transforms.emplace_back();
             Scene::Transform &transform = scene.transforms.back();
             transform.name = "Player";
-            transform.position = game.walkmesh->to_world_point(p.at);
-            transform.rotation = p.rotation;
+            transform.position = game.walkmesh->to_world_point(other.at);
+            transform.rotation = other.rotation;
             
             scene.drawables.emplace_back(&transform);
             Scene::Drawable &drawable = scene.drawables.back();
